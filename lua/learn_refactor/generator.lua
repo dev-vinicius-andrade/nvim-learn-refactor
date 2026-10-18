@@ -151,17 +151,22 @@ function M.generate(language, complexity, cb)
     cb(nil, err)
   end
 
-  if opts.provider == "static" then
+  local route = (opts.routes or {})[complexity] or {}
+  local name = route.provider or opts.provider
+  if name == "static" then
     return finish(nil, "static provider")
   end
-  local provider = require("learn_refactor.provider." .. opts.provider)
+  local found, provider = pcall(require, "learn_refactor.provider." .. name)
+  if not found then
+    return finish(nil, "unknown provider: " .. tostring(name))
+  end
   provider.request(M.build_prompt(language, complexity), function(raw, err)
     if not raw then
       return finish(nil, err)
     end
     local ch, perr = M.parse(raw)
     finish(ch, perr)
-  end)
+  end, route)
 end
 
 --- Pick an unseen saved challenge, then built-in seeds.

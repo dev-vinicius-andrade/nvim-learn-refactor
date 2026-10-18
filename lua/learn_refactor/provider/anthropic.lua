@@ -3,8 +3,9 @@ local config = require("learn_refactor.config")
 local M = {}
 
 --- cb(text|nil, err|nil)
-function M.request(prompt, cb)
+function M.request(prompt, cb, route)
   local o = config.options.anthropic
+  route = route or {}
   local key = os.getenv(o.api_key_env)
   if not key or key == "" then
     return cb(nil, o.api_key_env .. " not set")
@@ -13,7 +14,7 @@ function M.request(prompt, cb)
     return cb(nil, "curl not found")
   end
   local body = vim.json.encode({
-    model = o.model,
+    model = route.model or o.model,
     max_tokens = o.max_tokens,
     messages = { { role = "user", content = prompt } },
   })

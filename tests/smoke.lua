@@ -133,5 +133,36 @@ gen.generate("python", "easy", function(c, err) fb = c or { err = err } end)
 vim.wait(1000, function() return fb ~= nil end)
 check("provider failure falls back to seed", fb and fb.language == "python", fb and fb.err)
 
+-- openai-compatible provider + routing, with vim.system mocked
+local real_system = vim.system
+local captured
+vim.system = function(args, o, on_exit)
+  captured = { args = args, stdin = o.stdin }
+  local reply = vim.json.encode({ choices = { { message = { content = vim.json.encode({
+    title = "Routed", description = "d", code = "local y = 2\nreturn y\n",
+    bugs = { { id = "b", points = 10, fixed = { type = "absent", pattern = "local y" } } }, standards = {},
+  }) } } } })
+  vim.schedule(function() on_exit({ code = 0, stdout = reply, stderr = "" }) end)
+end
+local cfg = require("learn_refactor.config").options
+cfg.provider = "static"
+cfg.openai.model = "local-model"
+cfg.openai.base_url = "http://localhost:11434/v1/"
+cfg.routes = { easy = { provider = "openai", model = "routed-model" } }
+local routed
+gen.generate("lua", "easy", function(c, err) routed = c or { err = err } end)
+vim.wait(1000, function() return routed ~= nil end)
+check("openai route generates", routed and routed.title == "Routed", routed and routed.err)
+check("route model sent", captured and captured.stdin:find('"routed%-model"') ~= nil)
+check("base_url slash trimmed", captured and vim.tbl_contains(captured.args, "http://localhost:11434/v1/chat/completions"), captured and vim.inspect(captured.args))
+check("no auth header without api_key_env", captured and not vim.tbl_contains(captured.args, "authorization"))
+
+cfg.routes = { easy = { provider = "nope" } }
+local unknown
+gen.generate("lua", "easy", function(c, err) unknown = c or { err = err } end)
+vim.wait(1000, function() return unknown ~= nil end)
+check("unknown provider falls back", unknown and unknown.language == "lua", unknown and unknown.err)
+vim.system = real_system
+
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")

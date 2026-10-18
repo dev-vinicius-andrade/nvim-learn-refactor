@@ -20,6 +20,25 @@ Pickers use `vim.ui.select` (telescope-ui-select, snacks, dressing, fzf-lua... t
 Challenge generation uses the Anthropic API via `curl`: `export ANTHROPIC_API_KEY=...`.
 Without a key (or on failure) it falls back to your saved library, then built-in seeds. Run `:checkhealth learn-refactor`.
 
+### Cheaper / free models
+
+`provider = "openai"` talks to any OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, Groq, ...).
+`routes` picks provider/model per complexity, anything unset falls back to the global settings:
+
+```lua
+opts = {
+  provider = "openai",
+  openai = { base_url = "http://localhost:11434/v1", model = "qwen2.5-coder:14b" }, -- local, free
+  routes = {
+    hard   = { provider = "anthropic", model = "claude-sonnet-5-5" },
+    expert = { provider = "anthropic", model = "claude-sonnet-5-5" },
+    easy   = { provider = "anthropic", model = "claude-haiku-5-5" },
+  },
+}
+```
+
+Weak models are handled: generated checks that do not compile, or that already pass on the original code, are dropped.
+
 ## Usage
 
 | Command | Action |

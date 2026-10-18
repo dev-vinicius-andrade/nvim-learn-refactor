@@ -26,6 +26,18 @@ M.defaults = {
     max_tokens = 4096,
     timeout = 90,
   },
+  -- "openai" = any OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, Groq, ...)
+  openai = {
+    base_url = "http://localhost:11434/v1",
+    model = nil, -- required when used, e.g. "qwen2.5-coder:14b"
+    api_key_env = nil, -- e.g. "OPENROUTER_API_KEY"; nil = no auth header
+    max_tokens = 4096,
+    timeout = 180,
+  },
+  -- optional per-complexity override; any key falls back to the global provider/model, e.g.
+  -- routes = { easy = { provider = "anthropic", model = "claude-haiku-5-5" },
+  --            expert = { provider = "anthropic", model = "claude-sonnet-5-5" } }
+  routes = {},
   -- fall back to saved library / seeds when generation fails
   fallback = true,
   -- seconds a perfect-pace run is allowed per complexity (time bonus)
