@@ -90,7 +90,7 @@ end
 
 -- stop path
 session.open(lua_ch)
-check("control bar open with 5 spans", session.current.bar_win and #session.current.bar_spans == 5)
+check("control bar open with 6 spans (incl. menu)", session.current.bar_win and #session.current.bar_spans == 6)
 session.play()
 vim.api.nvim_set_current_win(session.current.win)
 vim.api.nvim_feedkeys("jjjjjjjj", "xt", false)
@@ -403,6 +403,21 @@ vim.api.nvim_exec_autocmds("CursorMoved", { buffer = vim.api.nvim_get_current_bu
 local row = vim.api.nvim_win_get_cursor(0)[1]
 check("menu: cursor clamped to items", row == 1 + #menu.items(), row)
 vim.api.nvim_feedkeys("q", "xt", false)
+
+-- menu key shown where new users look: bar, info window
+session.open(lua_ch)
+local bar_line = vim.api.nvim_buf_get_lines(session.current.bar_buf, 0, 1, false)[1]
+check("bar shows menu key", bar_line:find("Menu <leader>Rm", 1, true) ~= nil, bar_line)
+check("bar has a clickable menu span", session.current.bar_spans[6] and session.current.bar_spans[6].action == "menu")
+local info = table.concat(vim.api.nvim_buf_get_lines(session.current.info_buf, 0, -1, false), " ")
+check("info window shows menu key", info:find("Actions menu", 1, true) ~= nil and info:find("<leader>Rm", 1, true) ~= nil, info)
+session.stop(true)
+vim.keymap.del("n", "<leader>Rm")
+session.open(lua_ch)
+local bar_line2 = vim.api.nvim_buf_get_lines(session.current.bar_buf, 0, 1, false)[1]
+check("bar falls back to :RefactorMenu when unmapped", bar_line2:find(":RefactorMenu", 1, true) ~= nil, bar_line2)
+session.stop(true)
+vim.keymap.set("n", "<leader>Rm", "<cmd>RefactorMenu<cr>")
 
 -- teaching tips tied to habits
 local tips = require("learn_refactor.tips")

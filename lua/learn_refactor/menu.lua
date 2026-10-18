@@ -88,6 +88,12 @@ function M.mappings()
   return { by_cmd = by_cmd, by_action = by_action }
 end
 
+--- the key that opens this menu (from the user's real mappings), or nil
+function M.key()
+  local maps = M.mappings()
+  return maps.by_cmd["refactormenu"] or maps.by_action["menu"]
+end
+
 local function binding_for(it, maps)
   return maps.by_cmd[it.cmd:lower()] or (it.action and maps.by_action[it.action]) or nil
 end

@@ -102,9 +102,18 @@ local BAR_ITEMS = {
   { label = " ? Hint ", action = "hint" },
 }
 
+--- how to open the actions menu: the user's mapped key, else the command
+local function menu_hint()
+  local ok, key = pcall(function()
+    return require("learn_refactor.menu").key()
+  end)
+  return (ok and key) or ":RefactorMenu"
+end
+
 local function bar_text()
   local parts, spans, col = {}, {}, 0
-  for _, it in ipairs(BAR_ITEMS) do
+  local items = vim.list_extend(vim.deepcopy(BAR_ITEMS), { { label = " ≡ Menu " .. menu_hint() .. " ", action = "menu" } })
+  for _, it in ipairs(items) do
     local w = vim.fn.strdisplaywidth(it.label)
     spans[#spans + 1] = { from = col + 1, to = col + w, action = it.action }
     parts[#parts + 1] = it.label
@@ -156,7 +165,11 @@ local function open_bar()
     for _, sp in ipairs(M.current and M.current.bar_spans or {}) do
       if pos.wincol >= sp.from and pos.wincol <= sp.to then
         refocus()
-        M[sp.action]()
+        if sp.action == "menu" then
+          require("learn_refactor.menu").open()
+        else
+          M[sp.action]()
+        end
         return
       end
     end
@@ -171,8 +184,9 @@ local function open_info()
     string.format("%s  [%s / %s]", ch.title or "Refactor", ch.language, ch.complexity),
     ch.description or "",
     "Find the bug(s), improve naming/structure, keep behaviour. Use motions, not arrows.",
+    "Actions menu (play, pause, finish, hint, stop): " .. menu_hint(),
   }
-  vim.cmd("aboveleft 4split")
+  vim.cmd("aboveleft 6split")
   s.info_win = vim.api.nvim_get_current_win()
   s.info_buf = scratch(lines)
   vim.api.nvim_win_set_buf(s.info_win, s.info_buf)
@@ -262,9 +276,7 @@ function M.open(ch)
     end,
   })
   emit("Open", { id = ch.id })
-  -- `keymaps` may be false (lazy.nvim `keys` owns the mappings)
-  local play_key = (config.options.keymaps or {}).play
-  vim.notify("Refactor ready - :RefactorPlay" .. (play_key and (" or " .. play_key) or "") .. " starts the clock")
+  vim.notify("Refactor ready - open the actions menu with " .. menu_hint() .. " and choose Play to start the clock")
 end
 
 function M.play()
