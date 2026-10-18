@@ -57,9 +57,10 @@ function M.use_gpu(runtime)
 end
 
 --- compose argv (without trailing command); also used by tests
-function M.compose_args(runtime, gpu)
+function M.compose_args(runtime, gpu, network)
   local dir = plugin_root() .. "/docker"
-  local args = { runtime, "compose", "-f", dir .. "/compose.yaml" }
+  local args = { runtime, "compose", "-f", dir .. "/compose.yaml",
+    "-f", dir .. (network == "host" and "/compose.host.yaml" or "/compose.bridge.yaml") }
   if gpu == true then
     vim.list_extend(args, { "-f", dir .. (runtime == "docker" and "/compose.gpu-docker.yaml" or "/compose.gpu.yaml") })
   end
@@ -130,6 +131,20 @@ function M.pull(cb)
   end)
 end
 
+local function compose_up(rt, gpu, network, cb)
+  local args = M.compose_args(rt, gpu, network)
+  vim.list_extend(args, { "up", "-d" })
+  notify(string.format("starting %s (%s, %s, %s network)...", CONTAINER, rt, gpu and "GPU" or "CPU", network))
+  run(args, { env = { LEARN_REFACTOR_OLLAMA_PORT = port() } }, function(res)
+    if res.code == 0 then
+      return cb(true)
+    end
+    -- stdout first so the (more useful) stderr tail survives truncation; full text is kept for detection
+    local out = (res.stdout or "") .. (res.stderr or "")
+    cb(false, "compose up failed: " .. out, out:sub(-400))
+  end)
+end
+
 --- start container (idempotent), wait for the API, pull the model when missing. cb(ok, err)
 function M.up(cb)
   cb = cb or function(ok, err)
@@ -146,13 +161,7 @@ function M.up(cb)
     return cb(false, "gpu = true but no NVIDIA CDI spec: install nvidia-container-toolkit and run "
       .. "`sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml` (or set ollama.gpu = false)")
   end
-  local args = M.compose_args(rt, gpu)
-  vim.list_extend(args, { "up", "-d" })
-  notify(string.format("starting %s (%s, %s)...", CONTAINER, rt, gpu and "GPU" or "CPU"))
-  run(args, { env = { LEARN_REFACTOR_OLLAMA_PORT = port() } }, function(res)
-    if res.code ~= 0 then
-      return cb(false, "compose up failed: " .. ((res.stderr or "") .. (res.stdout or "")):sub(-400))
-    end
+  local function after_up()
     wait_ready(function(models)
       if not models then
         return cb(false, "ollama did not become ready in 60s (check `" .. rt .. " logs " .. CONTAINER .. "`)")
@@ -162,6 +171,28 @@ function M.up(cb)
       end
       M.pull(cb)
     end)
+  end
+  local want = config.options.ollama.network
+  compose_up(rt, gpu, want == "host" and "host" or "bridge", function(ok, err, tail)
+    if ok then
+      return after_up()
+    end
+    -- publishing ports needs netavark/nftables (or iptables); fall back to host networking
+    local network_error = err:find("netavark", 1, true) or err:find("nftables", 1, true) or err:find("iptables", 1, true)
+    if want == "auto" and network_error then
+      notify("port publishing failed on this host, retrying with host networking")
+      local down = M.compose_args(rt, false, "bridge")
+      vim.list_extend(down, { "down" })
+      return run(down, nil, function()
+        compose_up(rt, gpu, "host", function(ok2, _, tail2)
+          if ok2 then
+            return after_up()
+          end
+          cb(false, "compose up failed: " .. tail2)
+        end)
+      end)
+    end
+    cb(false, "compose up failed: " .. tail)
   end)
 end
 
@@ -170,7 +201,7 @@ function M.down()
   if not rt then
     return notify("neither podman nor docker found", vim.log.levels.ERROR)
   end
-  local args = M.compose_args(rt, false)
+  local args = M.compose_args(rt, false, "bridge")
   vim.list_extend(args, { "down" })
   run(args, nil, function(res)
     notify(res.code == 0 and "stopped (model volume kept)" or ("down failed: " .. (res.stderr or "")),

@@ -29,16 +29,19 @@ M.defaults = {
   anthropic = {
     api_key_env = "ANTHROPIC_API_KEY",
     model = "claude-sonnet-5-5",
-    max_tokens = 4096,
-    timeout = 90,
+    max_tokens = 8192, -- code + reference solution + tests + checks
+    timeout = 120,
   },
   -- "openai" = any OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, Groq, ...)
   openai = {
     base_url = "http://localhost:11434/v1",
     model = nil, -- required when used, e.g. "qwen2.5-coder:14b"
     api_key_env = nil, -- e.g. "OPENROUTER_API_KEY"; nil = no auth header
-    max_tokens = 4096,
-    timeout = 180,
+    -- response_format json_object: "auto" = only for the managed local Ollama; true/false to force
+    -- (some servers, e.g. LM Studio, reject json_object)
+    json_mode = "auto",
+    max_tokens = 8192,
+    timeout = 300, -- a local 14B model needs a while for ~6k tokens
   },
   -- Local Ollama in a container (podman or docker compose), see :RefactorOllama and docker/compose*.yaml.
   -- With provider = "openai" and base_url on `port`, `auto_start = true` brings it up on demand.
@@ -47,12 +50,17 @@ M.defaults = {
     gpu = "auto", -- "auto" | true | false; GPU needs nvidia-container-toolkit (podman: CDI spec)
     model = "qwen2.5-coder:14b", -- ~9 GB, fits a 12-16 GB GPU; try :7b for 8 GB or less
     port = 11434,
+    -- "auto": publish the port, fall back to host networking if that fails (e.g. WSL2 without nftables NAT)
+    network = "auto", -- "auto" | "bridge" | "host"
     auto_start = false,
   },
   -- optional per-complexity override; any key falls back to the global provider/model, e.g.
   -- routes = { easy = { provider = "anthropic", model = "claude-haiku-5-5" },
   --            expert = { provider = "anthropic", model = "claude-sonnet-5-5" } }
   routes = {},
+  -- ask again when fewer than `min_checks` validated checks survive (weak models); best attempt wins
+  attempts = 3,
+  min_checks = 3,
   -- fall back to saved library / seeds when generation fails
   fallback = true,
   -- seconds a perfect-pace run is allowed per complexity (time bonus)

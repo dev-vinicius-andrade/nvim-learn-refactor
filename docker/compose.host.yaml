@@ -1,0 +1,7 @@
+# Host networking, for hosts where port publishing is broken (e.g. WSL2 kernels without nftables NAT:
+# "netavark: nftables error"). Ollama is told to listen on localhost only.
+services:
+  ollama:
+    network_mode: host
+    environment:
+      OLLAMA_HOST: "127.0.0.1:${LEARN_REFACTOR_OLLAMA_PORT:-11434}"

@@ -46,11 +46,19 @@ request = function(prompt, cb, route)
   end
   vim.list_extend(args, { "--data-binary", "@-" })
 
-  local body = vim.json.encode({
+  local payload = {
     model = model,
     max_tokens = o.max_tokens,
     messages = { { role = "user", content = prompt } },
-  })
+  }
+  local json_mode = o.json_mode
+  if json_mode == "auto" then
+    json_mode = require("learn_refactor.ollama").is_local(route.base_url or o.base_url)
+  end
+  if json_mode then
+    payload.response_format = { type = "json_object" }
+  end
+  local body = vim.json.encode(payload)
   vim.system(args, { stdin = body, text = true }, vim.schedule_wrap(function(res)
     if res.code ~= 0 then
       return cb(nil, "curl failed: " .. (res.stderr or res.code))
@@ -66,6 +74,9 @@ request = function(prompt, cb, route)
     local msg = data.choices and data.choices[1] and data.choices[1].message
     if not msg or type(msg.content) ~= "string" then
       return cb(nil, "API returned no content")
+    end
+    if data.choices[1].finish_reason == "length" then
+      return cb(nil, "reply truncated (finish_reason=length): raise openai.max_tokens / the server context size")
     end
     cb(msg.content)
   end))

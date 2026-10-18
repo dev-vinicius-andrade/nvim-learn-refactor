@@ -250,7 +250,8 @@ ocfg.runtime = "podman"
 local args_cpu = ollama.compose_args("podman", false)
 local args_gpu = ollama.compose_args("podman", true)
 local args_docker_gpu = ollama.compose_args("docker", true)
-check("compose cpu: one file", #args_cpu == 4 and args_cpu[4]:find("compose.yaml$") ~= nil, vim.inspect(args_cpu))
+check("compose cpu: base + bridge", #args_cpu == 6 and args_cpu[4]:find("compose.yaml$") ~= nil and args_cpu[6]:find("compose.bridge.yaml$") ~= nil, vim.inspect(args_cpu))
+check("compose host network file", ollama.compose_args("podman", false, "host")[6]:find("compose.host.yaml$") ~= nil)
 check("compose podman gpu: CDI override", args_gpu[#args_gpu]:find("compose.gpu.yaml$") ~= nil)
 check("compose docker gpu: deploy override", args_docker_gpu[#args_docker_gpu]:find("compose.gpu%-docker.yaml$") ~= nil)
 ollama.has_cdi = function() return false end
@@ -274,7 +275,7 @@ local up_ok, up_err
 ollama.up(function(ok, err) up_ok, up_err = ok, err end)
 vim.wait(2000, function() return up_ok ~= nil end)
 check("ollama up succeeds", up_ok == true, up_err)
-check("up runs compose up -d", calls[1] and calls[1]:find("podman compose %-f .-compose.yaml up %-d") ~= nil, calls[1])
+check("up runs compose up -d", calls[1] and calls[1]:find("podman compose %-f .-compose.yaml %-f .-compose.bridge.yaml up %-d") ~= nil, calls[1])
 check("up pulls missing model", calls[#calls] and calls[#calls]:find("exec learn%-refactor%-ollama ollama pull qwen2.5%-coder:14b") ~= nil, calls[#calls])
 check("is_local", ollama.is_local("http://localhost:11434/v1") and not ollama.is_local("https://api.groq.com/openai/v1"))
 
@@ -291,6 +292,47 @@ require("learn_refactor.provider.openai").request("p", function(t, e) auto_err =
 check("openai provider calls ensure() and surfaces failure", ensured and auto_err == "no container runtime", auto_err)
 ocfg.auto_start = false
 vim.system = real_system
+
+-- literal checks, stray , retry on weak output
+check("literal absent", scoring.run_check({ type = "absent", literal = "for i = 0," }, "for i = 1, n") == true)
+check("literal present", scoring.run_check({ type = "present", literal = "range(len(" }, "x in range(len(a))") == true)
+check("literal is not a regex", scoring.run_check({ type = "present", literal = "a.c" }, "abc") == false)
+check("stray \\v tolerated", scoring.run_check({ type = "present", pattern = "\\vfoo+" }, "foooo") == true)
+check("check without literal/pattern is invalid", scoring.run_check({ type = "present" }, "x") == nil)
+
+cfg.provider, cfg.routes, cfg.min_checks, cfg.attempts = "mock", {}, 3, 3
+local calls_n = 0
+local function reply(bugs, stds)
+  return vim.json.encode({ title = "Retry" .. calls_n, description = "d", code = "x = 1\ny = 2\n", bugs = bugs, standards = stds })
+end
+package.loaded["learn_refactor.provider.mock"] = {
+  request = function(_, cb)
+    calls_n = calls_n + 1
+    if calls_n == 1 then -- weak: only one usable check
+      return cb(reply({ { id = "a", fixed = { type = "absent", literal = "x = 1" } } }, {}))
+    end
+    cb(reply({ { id = "a", fixed = { type = "absent", literal = "x = 1" } } },
+      { { id = "s1", tag = "t", check = { type = "present", literal = "total" } },
+        { id = "s2", tag = "t", check = { type = "present", literal = "count" } } }))
+  end,
+}
+local retried
+gen.generate("lua", "easy", function(c, err) retried = c or { err = err } end)
+vim.wait(5000, function() return retried ~= nil end)
+check("weak first attempt triggers retry", calls_n == 2, calls_n)
+check("retry result accepted (3 checks)", retried and #retried.bugs + #retried.standards == 3, retried and retried.err)
+
+calls_n = 0
+package.loaded["learn_refactor.provider.mock"] = {
+  request = function(_, cb)
+    calls_n = calls_n + 1
+    cb(reply({ { id = "a", fixed = { type = "absent", literal = "x = 1" } } }, {}))
+  end,
+}
+local best
+gen.generate("lua", "easy", function(c, err) best = c or { err = err } end)
+vim.wait(5000, function() return best ~= nil end)
+check("attempts capped, best kept", calls_n == 3 and best and #best.bugs == 1, calls_n)
 
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")

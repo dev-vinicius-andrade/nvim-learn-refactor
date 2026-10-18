@@ -1,6 +1,7 @@
 # Local Ollama for nvim-learn-refactor. Works with `podman compose` and `docker compose`.
-# Managed by :RefactorOllama, or by hand:
-#   podman compose -f docker/compose.yaml up -d
+# Networking lives in compose.bridge.yaml (published port) or compose.host.yaml (host network);
+# :RefactorOllama picks one. By hand:
+#   podman compose -f compose.yaml -f compose.bridge.yaml up -d
 #   podman exec learn-refactor-ollama ollama pull qwen2.5-coder:14b
 name: learn-refactor
 
@@ -8,13 +9,12 @@ services:
   ollama:
     image: docker.io/ollama/ollama:latest
     container_name: learn-refactor-ollama
-    # localhost only: the API has no auth
-    ports:
-      - "127.0.0.1:${LEARN_REFACTOR_OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama-models:/root/.ollama
     environment:
       OLLAMA_KEEP_ALIVE: "30m"
+      # default is 4096 tokens, too small for prompt + code + solution + tests (silently truncates the JSON)
+      OLLAMA_CONTEXT_LENGTH: "16384"
     restart: unless-stopped
 
 volumes:

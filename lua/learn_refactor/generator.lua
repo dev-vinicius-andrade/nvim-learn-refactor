@@ -52,10 +52,10 @@ Respond with ONE JSON object only (no markdown fences, no prose) with this shape
   "description": "1-2 sentences describing what the code is supposed to do (do NOT reveal bugs)",
   "code": "full source file as a string",
   "bugs": [ { "id": "kebab-id", "points": 30, "hint": "vague nudge", "description": "what is wrong",
-              "fixed": { "type": "absent"|"present", "pattern": "vim very-magic regex" } } ],
+              "fixed": { "type": "absent"|"present", "literal": "exact text (preferred)", "pattern": "vim regex (only if literal is not enough)" } } ],
   "standards": [ { "id": "kebab-id", "tag": "naming|duplication|magic-numbers|error-handling|idioms|stdlib|scoping|functional|complexity|types|...",
                    "name": "human readable rule", "points": 10,
-                   "check": { "type": "absent"|"present", "pattern": "vim very-magic regex" } } ],
+                   "check": { "type": "absent"|"present", "literal": "exact text (preferred)", "pattern": "vim regex (only if literal is not enough)" } } ],
   "solution": "the full source file AFTER fixing every bug and applying all the standards (reference answer)",
   "tests": { "code": "a self-contained test file for the code, see below" }
 }
@@ -64,7 +64,8 @@ the module from main (so main must expose the functions, e.g. `return M` in Lua,
 Python) and exits non-zero on failure using only the standard library (plain asserts, no test framework). Tests must
 exercise the intended behaviour, including the bugs, and PASS on "solution". Omit "tests" if you cannot do this reliably.]]
 local SCHEMA_CHECKS = [[
-Rules for checks: patterns are Vim regex in very-magic mode (\v), case-sensitive, matched against the WHOLE file text
+Rules for checks: PREFER "literal" (a plain substring of the file, matched exactly, whitespace included, no escaping needed;
+use a short distinctive snippet such as "for i = 0," or "range(len("). Use "pattern" only when a literal cannot express it. Patterns are Vim regex in very-magic mode (\v), case-sensitive, matched against the WHOLE file text
 (use \n for newlines). In very-magic mode ESCAPE literal = ~ @ % & { } with a backslash (e.g. \= for a literal equals sign) and use <word> for word boundaries (there is no \b). A "bug" check must be FALSE on the original code and TRUE once any reasonable fix is applied;
 prefer "absent" checks of the buggy construct. Same for standards: the check must fail on the original code.
 Make patterns tolerant of different valid refactorings (do not require one exact variable name).
@@ -163,20 +164,12 @@ local function validate_tests(ch, cb)
 end
 
 --- Generate async. cb(challenge|nil, err|nil)
+--- Weak models often produce broken checks/tests; validation drops them and we retry (opts.attempts)
+--- when fewer than opts.min_checks survive, keeping the best candidate.
 function M.generate(language, complexity, cb)
   local opts = config.options
-  local function finish(ch, err)
-    if ch then
-      ch.language, ch.complexity = language, complexity
-      validate_checks(ch)
-      if #ch.bugs == 0 and #ch.standards == 0 then
-        return cb(nil, "challenge had no usable checks")
-      end
-      return validate_tests(ch, function()
-        local _, saved = store.save_challenge(ch)
-        cb(saved)
-      end)
-    end
+
+  local function fallback(err)
     if opts.fallback then
       local ch2 = M.fallback(language, complexity)
       if ch2 then
@@ -190,19 +183,54 @@ function M.generate(language, complexity, cb)
   local route = (opts.routes or {})[complexity] or {}
   local name = route.provider or opts.provider
   if name == "static" then
-    return finish(nil, "static provider")
+    return fallback("static provider")
   end
   local found, provider = pcall(require, "learn_refactor.provider." .. name)
   if not found then
-    return finish(nil, "unknown provider: " .. tostring(name))
+    return fallback("unknown provider: " .. tostring(name))
   end
-  provider.request(M.build_prompt(language, complexity), function(raw, err)
-    if not raw then
-      return finish(nil, err)
+
+  local best
+  local function usable(ch)
+    return #ch.bugs + #ch.standards
+  end
+  local function accept(ch)
+    validate_tests(ch, function()
+      local _, saved = store.save_challenge(ch)
+      cb(saved)
+    end)
+  end
+
+  local function attempt(n, last_err)
+    if n > (opts.attempts or 1) then
+      if best then
+        return accept(best)
+      end
+      return fallback(last_err or "no usable challenge generated")
     end
-    local ch, perr = M.parse(raw)
-    finish(ch, perr)
-  end, route)
+    provider.request(M.build_prompt(language, complexity), function(raw, err)
+      if not raw then
+        return fallback(err) -- transport/API errors are not worth retrying
+      end
+      local ch, perr = M.parse(raw)
+      if not ch then
+        return attempt(n + 1, perr)
+      end
+      ch.language, ch.complexity = language, complexity
+      validate_checks(ch)
+      if usable(ch) > 0 and (not best or usable(ch) > usable(best)) then
+        best = ch
+      end
+      if usable(ch) >= (opts.min_checks or 1) then
+        return accept(ch)
+      end
+      if n < (opts.attempts or 1) then
+        vim.notify(string.format("LearnRefactor: only %d usable checks, retrying (%d/%d)", usable(ch), n + 1, opts.attempts))
+      end
+      attempt(n + 1, "challenge had too few usable checks")
+    end, route)
+  end
+  attempt(1)
 end
 
 --- Pick an unseen saved challenge, then built-in seeds.

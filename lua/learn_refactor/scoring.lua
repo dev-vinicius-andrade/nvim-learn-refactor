@@ -4,14 +4,23 @@ local M = {}
 
 --- true if check condition holds, false if not, nil on bad pattern
 function M.run_check(check, text)
-  if type(check) ~= "table" or type(check.pattern) ~= "string" then
+  if type(check) ~= "table" then
     return nil
   end
-  local ok, idx = pcall(vim.fn.match, text, "\\v\\C" .. check.pattern)
-  if not ok then
+  local found
+  if type(check.literal) == "string" and check.literal ~= "" then
+    found = text:find(check.literal, 1, true) ~= nil
+  elseif type(check.pattern) == "string" then
+    -- models often add their own \v; we already prepend it
+    local pat = check.pattern:gsub("\\v", "")
+    local ok, idx = pcall(vim.fn.match, text, "\\v\\C" .. pat)
+    if not ok then
+      return nil
+    end
+    found = idx >= 0
+  else
     return nil
   end
-  local found = idx >= 0
   if check.type == "absent" then
     return not found
   end

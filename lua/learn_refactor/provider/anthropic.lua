@@ -42,6 +42,9 @@ function M.request(prompt, cb, route)
         parts[#parts + 1] = block.text
       end
     end
+    if data.stop_reason == "max_tokens" then
+      return cb(nil, "reply truncated (stop_reason=max_tokens): raise anthropic.max_tokens")
+    end
     cb(table.concat(parts))
   end))
 end

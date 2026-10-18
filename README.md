@@ -63,6 +63,15 @@ opts = {
 `:RefactorOllama up | down | status | pull`. `down` keeps the model volume. `qwen2.5-coder:14b` (~9 GB) suits a 12-16 GB GPU;
 use `:7b` for 8 GB or less, and expect weaker JSON/tests from small models (bad ones are dropped, see Scoring integrity).
 
+Networking: `ollama.network = "auto"` publishes `127.0.0.1:11434`, and falls back to host networking (`compose.host.yaml`) when
+that fails, e.g. on WSL2 kernels without nftables NAT (`netavark: nftables error`). The container runs with a 16k context
+(`OLLAMA_CONTEXT_LENGTH`); Ollama's default 4k silently truncates the reply.
+
+Measured on an RTX 5060 Ti with `qwen2.5-coder:14b` (100% GPU): ~20 s for an easy challenge, ~2 min for a medium one with
+retries. Small models write weak regexes and tests that disagree with their own solution; the plugin asks for plain `literal`
+checks, drops invalid ones, and retries up to `attempts` (3) until `min_checks` (3) survive. Hidden tests are usually dropped for
+local 14B models, so scoring leans on checks; use a stronger model for `hard`/`expert` via `routes`.
+
 GPU with podman needs a CDI spec once per host (also on WSL2, with the Windows NVIDIA driver):
 
 ```bash
