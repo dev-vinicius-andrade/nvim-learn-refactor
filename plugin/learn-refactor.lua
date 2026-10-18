@@ -44,6 +44,7 @@ local simple = {
   RefactorFinish = { "finish", "Finish and score the session" },
   RefactorHint = { "hint", "Reveal a hint (costs points)" },
   RefactorLibrary = { "library", "Pick a saved challenge" },
+  RefactorMenu = { "menu", "Floating action menu (play, pause, finish, ...)" },
   RefactorConfigTips = { "config_tips", "Suggest improvements to your Neovim setup" },
   RefactorStats ={ "stats", "Show points and weak topics" },
 }

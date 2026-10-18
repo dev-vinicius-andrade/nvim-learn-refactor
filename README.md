@@ -85,12 +85,13 @@ sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 |---|---|
 | `:Refactor [lang] [complexity] [library]` | menu, or direct start |
 | `:RefactorPlay` / `Pause` / `Stop` / `Finish` | session control (also clickable bar, top-right) |
+| `:RefactorMenu` | floating menu with only the actions valid now (`<leader>Rm`) |
 | `:RefactorHint` | reveal next bug hint (-5 pts) |
 | `:RefactorLibrary` | replay a saved challenge |
 | `:RefactorStats` | points + weakest topics |
 | `:RefactorConfigTips` | suggestions to improve your own Neovim setup |
 
-Default keymaps (set `keymaps = false`, or one entry to `false`, to skip): `<leader>Rr` start, `Rl` library, `Rp` play, `RP` pause, `Rs` stop, `Rf` finish, `Rh` hint, `Rt` setup tips.
+Default keymaps (set `keymaps = false`, or one entry to `false`, to skip): `<leader>Rm` menu, `Rr` start, `Rl` library, `Rp` play, `RP` pause, `Rs` stop, `Rf` finish, `Rh` hint, `Rt` setup tips.
 
 Statusline: `require("learn_refactor").statusline()`. Events: `User LearnRefactorOpen|Play|Pause|Stop|Finish`.
 

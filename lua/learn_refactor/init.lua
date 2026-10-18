@@ -38,6 +38,10 @@ function M.library()
   require("learn_refactor.ui").menu({ library = true })
 end
 
+function M.menu()
+  require("learn_refactor.menu").open()
+end
+
 function M.config_tips()
   require("learn_refactor.ui").config_tips()
 end

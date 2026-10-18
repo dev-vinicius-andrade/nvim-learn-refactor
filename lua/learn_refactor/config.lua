@@ -71,6 +71,7 @@ M.defaults = {
   -- `false` to skip default keymaps (e.g. when lazy.nvim `keys` defines them), or override per action.
   -- <leader>R (capital) avoids clashing with common <leader>r rename/restart LSP mappings.
   keymaps = {
+    menu = "<leader>Rm", -- state-aware floating menu (play / pause / finish ...)
     start = "<leader>Rr",
     library = "<leader>Rl",
     play = "<leader>Rp",
