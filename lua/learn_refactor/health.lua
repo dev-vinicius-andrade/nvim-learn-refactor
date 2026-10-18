@@ -35,6 +35,21 @@ function M.check()
   else
     vim.health.info("provider = " .. o.provider)
   end
+  if o.provider == "openai" or o.ollama.auto_start then
+    local ollama = require("learn_refactor.ollama")
+    local rt = ollama.runtime()
+    if rt then
+      vim.health.ok("container runtime: " .. rt)
+      local gpu = ollama.use_gpu(rt)
+      if gpu == "missing-cdi" then
+        vim.health.error("ollama.gpu = true but no NVIDIA CDI spec", "sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml")
+      else
+        vim.health.info("ollama GPU override: " .. tostring(gpu == true))
+      end
+    elseif o.ollama.auto_start then
+      vim.health.error("ollama.auto_start needs podman or docker in PATH")
+    end
+  end
   for cx, r in pairs(o.routes or {}) do
     vim.health.info(string.format("route %s -> %s %s", cx, r.provider or o.provider, r.model or "(default model)"))
   end

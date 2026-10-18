@@ -47,6 +47,29 @@ opts = {
 
 Weak models are handled: generated checks that do not compile, or that already pass on the original code, are dropped.
 
+### Local Ollama in a container (podman or docker, optional GPU)
+
+`docker/compose.yaml` runs Ollama bound to `127.0.0.1` with a persistent model volume; `compose.gpu.yaml` (podman/CDI)
+and `compose.gpu-docker.yaml` add an NVIDIA GPU. The plugin picks podman or docker, enables the GPU override when
+it is available (`ollama.gpu = "auto"`), starts the container, waits for the API and pulls the model:
+
+```lua
+opts = {
+  provider = "openai",   -- talks to http://localhost:11434/v1 by default
+  ollama = { model = "qwen2.5-coder:14b", auto_start = true }, -- start on demand when generating
+}
+```
+
+`:RefactorOllama up | down | status | pull`. `down` keeps the model volume. `qwen2.5-coder:14b` (~9 GB) suits a 12-16 GB GPU;
+use `:7b` for 8 GB or less, and expect weaker JSON/tests from small models (bad ones are dropped, see Scoring integrity).
+
+GPU with podman needs a CDI spec once per host (also on WSL2, with the Windows NVIDIA driver):
+
+```bash
+sudo pacman -S nvidia-container-toolkit   # or apt/dnf equivalent
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+```
+
 ## Usage
 
 | Command | Action |

@@ -243,5 +243,54 @@ vim.wait(20000, function() return gen_good ~= nil end)
 check("valid tests kept", gen_good and gen_good.tests ~= nil, gen_good and gen_good.err)
 check("model-supplied run_cmd stripped", gen_good and gen_good.run_cmd == nil)
 
+-- ollama container management (vim.system mocked)
+local ollama = require("learn_refactor.ollama")
+local ocfg = cfg.ollama
+ocfg.runtime = "podman"
+local args_cpu = ollama.compose_args("podman", false)
+local args_gpu = ollama.compose_args("podman", true)
+local args_docker_gpu = ollama.compose_args("docker", true)
+check("compose cpu: one file", #args_cpu == 4 and args_cpu[4]:find("compose.yaml$") ~= nil, vim.inspect(args_cpu))
+check("compose podman gpu: CDI override", args_gpu[#args_gpu]:find("compose.gpu.yaml$") ~= nil)
+check("compose docker gpu: deploy override", args_docker_gpu[#args_docker_gpu]:find("compose.gpu%-docker.yaml$") ~= nil)
+ollama.has_cdi = function() return false end
+ocfg.gpu = true
+check("gpu=true without CDI is flagged", ollama.use_gpu("podman") == "missing-cdi")
+check("docker gpu needs no CDI", ollama.use_gpu("docker") == true)
+ocfg.gpu = false
+check("gpu=false", ollama.use_gpu("podman") == false)
+
+local calls = {}
+vim.system = function(args, o, on_exit)
+  calls[#calls + 1] = table.concat(args, " ")
+  local res = { code = 0, stdout = "", stderr = "" }
+  if args[1] == "curl" then
+    res.stdout = vim.json.encode({ models = {} }) -- up, but model missing
+  end
+  vim.schedule(function() on_exit(res) end)
+end
+ocfg.model = "qwen2.5-coder:14b"
+local up_ok, up_err
+ollama.up(function(ok, err) up_ok, up_err = ok, err end)
+vim.wait(2000, function() return up_ok ~= nil end)
+check("ollama up succeeds", up_ok == true, up_err)
+check("up runs compose up -d", calls[1] and calls[1]:find("podman compose %-f .-compose.yaml up %-d") ~= nil, calls[1])
+check("up pulls missing model", calls[#calls] and calls[#calls]:find("exec learn%-refactor%-ollama ollama pull qwen2.5%-coder:14b") ~= nil, calls[#calls])
+check("is_local", ollama.is_local("http://localhost:11434/v1") and not ollama.is_local("https://api.groq.com/openai/v1"))
+
+-- auto_start hooks the openai provider
+calls = {}
+ocfg.auto_start = true
+ocfg.model = "m1"
+cfg.openai.model = "m1"
+cfg.openai.base_url = "http://localhost:11434/v1"
+local ensured = false
+ollama.ensure = function(cb) ensured = true cb(false, "no container runtime") end
+local auto_err
+require("learn_refactor.provider.openai").request("p", function(t, e) auto_err = e end, {})
+check("openai provider calls ensure() and surfaces failure", ensured and auto_err == "no container runtime", auto_err)
+ocfg.auto_start = false
+vim.system = real_system
+
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")

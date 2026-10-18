@@ -27,6 +27,16 @@ end, {
   end,
 })
 
+vim.api.nvim_create_user_command("RefactorOllama", function(o)
+  require("learn_refactor.ollama").command(o.fargs[1])
+end, {
+  nargs = "?",
+  desc = "Manage the local Ollama container: up|down|status|pull",
+  complete = function()
+    return { "up", "down", "status", "pull" }
+  end,
+})
+
 local simple = {
   RefactorPlay = { "play", "Start / resume the clock" },
   RefactorPause = { "pause", "Pause the session (buffer locked)" },

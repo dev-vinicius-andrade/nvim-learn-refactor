@@ -1,0 +1,8 @@
+# NVIDIA GPU via CDI (podman, and docker >= 25 with CDI enabled).
+# One-time host setup (also WSL2):
+#   sudo pacman -S nvidia-container-toolkit        # or your distro's package
+#   sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+services:
+  ollama:
+    devices:
+      - nvidia.com/gpu=all

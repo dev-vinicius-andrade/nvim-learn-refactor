@@ -40,6 +40,15 @@ M.defaults = {
     max_tokens = 4096,
     timeout = 180,
   },
+  -- Local Ollama in a container (podman or docker compose), see :RefactorOllama and docker/compose*.yaml.
+  -- With provider = "openai" and base_url on `port`, `auto_start = true` brings it up on demand.
+  ollama = {
+    runtime = nil, -- "podman" | "docker"; nil = first one found
+    gpu = "auto", -- "auto" | true | false; GPU needs nvidia-container-toolkit (podman: CDI spec)
+    model = "qwen2.5-coder:14b", -- ~9 GB, fits a 12-16 GB GPU; try :7b for 8 GB or less
+    port = 11434,
+    auto_start = false,
+  },
   -- optional per-complexity override; any key falls back to the global provider/model, e.g.
   -- routes = { easy = { provider = "anthropic", model = "claude-haiku-5-5" },
   --            expert = { provider = "anthropic", model = "claude-sonnet-5-5" } }

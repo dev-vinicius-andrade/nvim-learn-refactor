@@ -4,13 +4,30 @@ local config = require("learn_refactor.config")
 local M = {}
 
 --- cb(text|nil, err|nil); route may override `model`
+local request
+
 function M.request(prompt, cb, route)
   local o = config.options.openai
   route = route or {}
+  local ollama = require("learn_refactor.ollama")
+  if config.options.ollama.auto_start and ollama.is_local(route.base_url or o.base_url) then
+    return ollama.ensure(function(ok, err)
+      if not ok then
+        return cb(nil, err)
+      end
+      request(prompt, cb, route)
+    end)
+  end
+  request(prompt, cb, route)
+end
+
+request = function(prompt, cb, route)
+  local o = config.options.openai
   if vim.fn.executable("curl") ~= 1 then
     return cb(nil, "curl not found")
   end
-  local model = route.model or o.model
+  -- a model set for the managed Ollama is the default when openai.model is unset
+  local model = route.model or o.model or config.options.ollama.model
   if not model or model == "" then
     return cb(nil, "openai.model not set")
   end
