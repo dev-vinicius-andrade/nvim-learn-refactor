@@ -90,8 +90,48 @@ end
 
 -- stop path
 session.open(lua_ch)
+check("control bar open with 5 spans", session.current.bar_win and #session.current.bar_spans == 5)
+session.play()
+vim.api.nvim_set_current_win(session.current.win)
+vim.api.nvim_feedkeys("jjjjjjjj", "xt", false)
+vim.api.nvim_feedkeys(vim.keycode("<Down><Down>"), "xt", false)
+check("jjjjjjjj counted as hjkl spam", session.current.metrics.spam >= 3, vim.inspect(session.current.metrics))
+check("arrows counted", session.current.metrics.arrows == 2, vim.inspect(session.current.metrics))
+session.hint()
+check("hint counted", session.current.metrics.hints == 1)
 session.stop(true)
 check("stop clears session", session.current == nil)
+
+-- generate path with a mock provider (invalid + valid checks)
+package.loaded["learn_refactor.provider.mock"] = {
+  request = function(_, cb)
+    cb(vim.json.encode({
+      title = "Mock",
+      description = "d",
+      code = "local x = 1\nreturn x\n",
+      bugs = {
+        { id = "free", fixed = { type = "absent", pattern = "nomatch" } }, -- true on original -> dropped
+        { id = "bad", fixed = { type = "absent", pattern = "(" } }, -- invalid regex -> dropped
+        { id = "ok", points = 20, fixed = { type = "absent", pattern = "local x" } },
+      },
+      standards = {},
+    }))
+  end,
+}
+require("learn_refactor.config").options.provider = "mock"
+local generated
+gen.generate("lua", "medium", function(c, err) generated = c or { err = err } end)
+vim.wait(1000, function() return generated ~= nil end)
+check("generate ok", generated and generated.id, generated and generated.err)
+check("invalid/free checks dropped", generated and #generated.bugs == 1 and generated.bugs[1].id == "ok")
+check("generated saved to library", #require("learn_refactor.store").list_challenges({ complexity = "medium" }) == 1)
+
+-- failing provider -> fallback
+package.loaded["learn_refactor.provider.mock"] = { request = function(_, cb) cb(nil, "boom") end }
+local fb
+gen.generate("python", "easy", function(c, err) fb = c or { err = err } end)
+vim.wait(1000, function() return fb ~= nil end)
+check("provider failure falls back to seed", fb and fb.language == "python", fb and fb.err)
 
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")
