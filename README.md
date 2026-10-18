@@ -109,6 +109,14 @@ On finish you also get:
 - **Your setup**: suggestions from your own config, tied to what happened in the session: options (`relativenumber`, `scrolloff`, `smartcase`, `inccommand`, `undofile`, `mouse`...), missing plugin categories (jump, surround, text objects, which-key, fuzzy finder, formatter, treesitter; installed plugins are detected via lazy.nvim or the runtimepath), and LSP refactoring keys. It only reports; it never changes your config. `:RefactorConfigTips` shows the full list any time.
 - `s` in the result window opens the reference solution when the model provided one.
 
+## The menu teaches the keys
+
+`:RefactorMenu` (`<leader>Rm`) lists only what is valid right now (idle: new, library, stats...; running: pause, finish,
+hint, stop). Each row shows the single-key shortcut inside the menu, **the key you have mapped for the same action outside
+it** (read from your real mappings, including lazy.nvim `keys`), and the command, so you graduate from the menu to the keys.
+A help block explains the menu, and a Vim tip is chosen from the habits the motion coach has seen in your sessions
+(long `j` runs, arrows, backspaces...), or a rotating general tip.
+
 ## Scoring integrity
 
 - Models also write a reference `solution` and hidden `tests` (plain asserts, run through `languages.<lang>.test`). Tests are kept only if they pass on that solution, and bug checks must hold on the solution too; otherwise they are dropped, so you are never punished for a broken test.

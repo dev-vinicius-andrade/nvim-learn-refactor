@@ -80,6 +80,18 @@ function M.profile()
   return read_json(dir() .. "/profile.json", { total_points = 0, tags = {}, languages = {} })
 end
 
+--- accumulate motion-coach counters (vertical, horizontal, words, xs, bs, arrows, mouse)
+function M.add_habits(stats)
+  local p = M.profile()
+  p.habits = p.habits or {}
+  for k, n in pairs(stats) do
+    if type(n) == "number" and n > 0 then
+      p.habits[k] = (p.habits[k] or 0) + n
+    end
+  end
+  M.save_profile(p)
+end
+
 function M.save_profile(p)
   return write_json(dir() .. "/profile.json", p)
 end

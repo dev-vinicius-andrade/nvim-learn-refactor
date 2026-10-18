@@ -435,6 +435,7 @@ function M.finish()
   local m = vim.tbl_extend("force", s.metrics, { seconds = s.elapsed_ns / 1e9, errors = errors })
 
   local coach_tips, coach_stats = require("learn_refactor.coach").analyze(s.keylog, m)
+  store.add_habits(vim.tbl_extend("force", coach_stats, { arrows = m.arrows, mouse = m.mouse }))
   local advice = require("learn_refactor.advisor").lines({ stats = coach_stats, metrics = m, lsp = lsp }, 5)
 
   close_ui()

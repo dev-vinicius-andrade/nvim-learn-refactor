@@ -349,7 +349,7 @@ check("setup accepts keymaps = false", true)
 
 -- floating menu
 local menu = require("learn_refactor.menu")
-local function keys_of(items) local k = {} for _, it in ipairs(items) do k[#k + 1] = it[1] end return table.concat(k) end
+local function keys_of(items) local k = {} for _, it in ipairs(items) do k[#k + 1] = it.key end return table.concat(k) end
 check("menu idle items", keys_of(menu.items()) == "nlgtudi", keys_of(menu.items()))
 session.open(lua_ch)
 check("menu ready items", keys_of(menu.items()) == "ps", keys_of(menu.items()))
@@ -371,6 +371,50 @@ menu.open()
 vim.api.nvim_feedkeys("s", "xt", false)
 vim.wait(500, function() return session.current == nil end)
 check("hotkey s stops", session.current == nil)
+
+-- menu shows real key bindings + help
+vim.g.mapleader = " "
+local function menu_text()
+  local lines = menu.render(menu.items())
+  return table.concat(lines, "\n")
+end
+-- the earlier setup() calls mapped the default keys (deep-merge keeps defaults); start from a clean slate
+for _, m in ipairs(vim.api.nvim_get_keymap("n")) do
+  if (m.desc or ""):match("^LearnRefactor ") then pcall(vim.keymap.del, "n", m.lhs) end
+end
+local before = menu_text()
+check("menu: idle shows commands", before:find(":RefactorLibrary", 1, true) ~= nil)
+check("menu: help block", before:find("How to use this menu", 1, true) ~= nil)
+check("menu: no-keys hint when nothing mapped", before:find("no keys are mapped yet", 1, true) ~= nil, before)
+vim.keymap.set("n", "<leader>Rr", "<cmd>Refactor<cr>")           -- lazy `keys` style
+vim.keymap.set("n", "<leader>Rl", ":RefactorLibrary<CR>")
+vim.keymap.set("n", "<leader>Rm", "<cmd>RefactorMenu<cr>")
+vim.keymap.set("n", "<leader>Rt", function() end, { desc = "LearnRefactor config_tips" }) -- setup() style
+local after = menu_text()
+check("menu: lazy-style key shown", after:find("<leader>Rr", 1, true) ~= nil, after)
+check("menu: colon-style key shown", after:find("<leader>Rl", 1, true) ~= nil)
+check("menu: setup()-style key shown", after:find("<leader>Rt", 1, true) ~= nil)
+check("menu: reopen hint uses menu key", after:find("reopen this menu: <leader>Rm or :RefactorMenu", 1, true) ~= nil, after)
+check("menu: no 'no keys' hint once mapped", after:find("no keys are mapped yet", 1, true) == nil)
+check("menu: unmapped action shows dash", after:find("-  :RefactorStats", 1, true) ~= nil or after:find("%-%s+:RefactorStats") ~= nil, after)
+menu.open()
+vim.api.nvim_feedkeys("G", "xt", false) -- cursor must stay on an item row, never on help text
+vim.api.nvim_exec_autocmds("CursorMoved", { buffer = vim.api.nvim_get_current_buf() }) -- headless: no redraw loop to fire it
+local row = vim.api.nvim_win_get_cursor(0)[1]
+check("menu: cursor clamped to items", row == 1 + #menu.items(), row)
+vim.api.nvim_feedkeys("q", "xt", false)
+
+-- teaching tips tied to habits
+local tips = require("learn_refactor.tips")
+local general = tips.pick({})
+check("tips: general tip", type(general) == "string" and #general > 10)
+local habit_tip, habit = tips.pick({ vertical = 30, mouse = 2 })
+check("tips: picks the biggest habit", habit == "vertical" and habit_tip ~= nil)
+require("learn_refactor.store").add_habits({ vertical = 8, horizontal = 0, arrows = 2 })
+require("learn_refactor.store").add_habits({ vertical = 4 })
+local habits = require("learn_refactor.store").profile().habits
+check("habits accumulate in profile", habits.vertical == 12 and habits.arrows == 2 and habits.horizontal == nil, vim.inspect(habits))
+check("menu shows habit tip", menu_text():find("Tip for your habits:", 1, true) ~= nil)
 
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")
