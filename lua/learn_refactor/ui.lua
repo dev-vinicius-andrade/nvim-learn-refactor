@@ -19,6 +19,29 @@ local function start(ch, err)
   session.open(ch)
 end
 
+--- set of enabled language names
+local function enabled()
+  local set = {}
+  for name in pairs(config.options.languages) do
+    set[name] = true
+  end
+  return set
+end
+
+--- unfinished challenges in the languages the user enabled (latest first)
+function M.unfinished()
+  return store.unfinished(enabled())
+end
+
+--- jump straight to the latest unfinished challenge, keeping previous edits and clock
+function M.continue()
+  local list = M.unfinished()
+  if #list == 0 then
+    return vim.notify("LearnRefactor: nothing unfinished - start a new challenge with :Refactor", vim.log.levels.INFO)
+  end
+  session.open(list[1].ch, { resume = true, seconds = list[1].seconds })
+end
+
 function M.generate(language, complexity)
   vim.notify(string.format("LearnRefactor: generating %s / %s ...", language, complexity))
   generator.generate(language, complexity, start)
@@ -29,15 +52,25 @@ function M.library(language, complexity)
   if #list == 0 then
     return vim.notify("LearnRefactor: library is empty for that selection", vim.log.levels.INFO)
   end
+  local pending = {}
+  for _, u in ipairs(M.unfinished()) do
+    pending[u.ch.id] = u
+  end
   vim.ui.select(list, {
     prompt = "Saved challenges",
     format_item = function(c)
-      return string.format("%s  [%s/%s]  %s", c.title, c.language, c.complexity, os.date("%Y-%m-%d", c.created_at or 0))
+      return string.format("%s  [%s/%s]  %s%s", c.title, c.language, c.complexity,
+        os.date("%Y-%m-%d", c.created_at or 0), pending[c.id] and "  (unfinished)" or "")
     end,
   }, function(choice)
-    if choice then
-      start(choice)
+    if not choice then
+      return
     end
+    local u = pending[choice.id]
+    if u and u.seconds then
+      return session.open(choice, { resume = true, seconds = u.seconds })
+    end
+    start(choice)
   end)
 end
 

@@ -6,11 +6,12 @@ return {
     -- dir = "~/path/to/nvim-learn-refactor", -- use this instead of the line above for a local checkout
     cmd = {
       "Refactor", "RefactorPlay", "RefactorPause", "RefactorStop", "RefactorFinish",
-      "RefactorHint", "RefactorLibrary", "RefactorStats", "RefactorConfigTips", "RefactorMenu", "RefactorOllama",
+      "RefactorHint", "RefactorLibrary", "RefactorStats", "RefactorConfigTips", "RefactorMenu", "RefactorOllama", "RefactorContinue",
     },
     -- lazy-load on first use; `keys` also registers the mappings (and shows them in which-key)
     keys = {
       { "<leader>Rm", "<cmd>RefactorMenu<cr>", desc = "Refactor: menu" },
+      { "<leader>Rc", "<cmd>RefactorContinue<cr>", desc = "Refactor: continue unfinished" },
       { "<leader>Rr", "<cmd>Refactor<cr>", desc = "Refactor: start challenge" },
       { "<leader>Rl", "<cmd>RefactorLibrary<cr>", desc = "Refactor: saved challenges" },
       { "<leader>Rp", "<cmd>RefactorPlay<cr>", desc = "Refactor: play / resume" },

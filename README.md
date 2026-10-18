@@ -85,13 +85,14 @@ sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 |---|---|
 | `:Refactor [lang] [complexity] [library]` | menu, or direct start |
 | `:RefactorPlay` / `Pause` / `Stop` / `Finish` | session control (also clickable bar, top-right) |
+| `:RefactorContinue` | jump straight to the latest unfinished challenge (keeps your edits and clock) |
 | `:RefactorMenu` | floating menu with only the actions valid now (`<leader>Rm`) |
 | `:RefactorHint` | reveal next bug hint (-5 pts) |
 | `:RefactorLibrary` | replay a saved challenge |
 | `:RefactorStats` | points + weakest topics |
 | `:RefactorConfigTips` | suggestions to improve your own Neovim setup |
 
-Default keymaps (set `keymaps = false`, or one entry to `false`, to skip): `<leader>Rm` menu, `Rr` start, `Rl` library, `Rp` play, `RP` pause, `Rs` stop, `Rf` finish, `Rh` hint, `Rt` setup tips.
+Default keymaps (set `keymaps = false`, or one entry to `false`, to skip): `<leader>Rm` menu, `Rc` continue, `Rr` start, `Rl` library, `Rp` play, `RP` pause, `Rs` stop, `Rf` finish, `Rh` hint, `Rt` setup tips.
 
 Statusline: `require("learn_refactor").statusline()`. Events: `User LearnRefactorOpen|Play|Pause|Stop|Finish`.
 
@@ -100,6 +101,24 @@ Statusline: `require("learn_refactor").statusline()`. Events: `User LearnRefacto
 - Bugs found/fixed (check per bug), best-practice rules (naming, duplication, magic numbers, idioms...)
 - Optional `run_cmd` behaviour check (+40), no LSP errors (+10), speed bonus vs par time (+15)
 - Clean motions bonus (+10); penalty per arrow key, mouse click, or `hjkl` repeated >4x (max -15); hints cost points
+
+## Choosing your languages
+
+`languages` is the list the menu offers, and **it replaces the defaults** (it is not merged), so list only what you practice:
+
+```lua
+opts = {
+  languages = { "typescript", "go", "csharp" },               -- built-in definitions
+  -- or a map; entries merge over the built-in one of the same name:
+  -- languages = { python = { test = "python3 {test}" }, zig = {} },  -- unknown names get ext = name
+}
+```
+
+## Unfinished challenges
+
+A challenge is unfinished until you score it. `:RefactorContinue` (menu key `c`, `<leader>Rc`) reopens the most recently
+touched one in your enabled languages, with the code you had and the clock where you left it (Stop saves your buffer).
+The library marks unfinished entries, and picking one resumes it.
 
 ## Coaching and setup tips
 

@@ -76,6 +76,31 @@ function M.append_history(entry)
   write_json(dir() .. "/history.json", h)
 end
 
+--- Challenges never finished (stopped, or generated but not completed), most recently touched first.
+--- `languages`: optional set { name = true }. Returns list of { ch = challenge, seconds = clock at last stop }.
+function M.unfinished(languages)
+  local finished, activity, seconds = {}, {}, {}
+  for _, h in ipairs(M.history()) do
+    if h.status == "finished" then
+      finished[h.challenge_id] = true
+    end
+    activity[h.challenge_id] = math.max(activity[h.challenge_id] or 0, h.at or 0)
+    if h.status == "stopped" then
+      seconds[h.challenge_id] = h.seconds
+    end
+  end
+  local list = {}
+  for _, ch in ipairs(M.list_challenges()) do
+    if not finished[ch.id] and (not languages or languages[ch.language]) then
+      list[#list + 1] = { ch = ch, seconds = seconds[ch.id], at = activity[ch.id] or ch.created_at or 0 }
+    end
+  end
+  table.sort(list, function(a, b)
+    return a.at > b.at
+  end)
+  return list
+end
+
 function M.profile()
   return read_json(dir() .. "/profile.json", { total_points = 0, tags = {}, languages = {} })
 end

@@ -350,7 +350,7 @@ check("setup accepts keymaps = false", true)
 -- floating menu
 local menu = require("learn_refactor.menu")
 local function keys_of(items) local k = {} for _, it in ipairs(items) do k[#k + 1] = it.key end return table.concat(k) end
-check("menu idle items", keys_of(menu.items()) == "nlgtudi", keys_of(menu.items()))
+check("menu idle items (continue first: unfinished exist)", keys_of(menu.items()) == "cnlgtudi", keys_of(menu.items()))
 session.open(lua_ch)
 check("menu ready items", keys_of(menu.items()) == "ps", keys_of(menu.items()))
 menu.open()
@@ -430,6 +430,65 @@ require("learn_refactor.store").add_habits({ vertical = 4 })
 local habits = require("learn_refactor.store").profile().habits
 check("habits accumulate in profile", habits.vertical == 12 and habits.arrows == 2 and habits.horizontal == nil, vim.inspect(habits))
 check("menu shows habit tip", menu_text():find("Tip for your habits:", 1, true) ~= nil)
+
+-- language selection: `languages` REPLACES the defaults; list or map; entries inherit built-ins
+local lr = require("learn_refactor")
+local tmp2 = vim.fn.tempname()
+lr.setup({ provider = "static", data_dir = tmp2, keymaps = false, languages = { "typescript", "go" } })
+local c2 = require("learn_refactor.config").options
+local names = vim.tbl_keys(c2.languages)
+table.sort(names)
+check("languages list selects only those", table.concat(names, ",") == "go,typescript", table.concat(names, ","))
+check("list entries inherit built-in ext", c2.languages.go.ext == "go" and c2.languages.typescript.ext == "ts")
+lr.setup({ provider = "static", data_dir = tmp2, keymaps = false,
+  languages = { python = { test = "python3 {test}" }, csharp = { ext = "cs" }, zig = {} } })
+c2 = require("learn_refactor.config").options
+check("map entry merges over built-in (keeps ext)", c2.languages.python.ext == "py" and c2.languages.python.test == "python3 {test}")
+check("unknown language gets ext = name", c2.languages.zig and c2.languages.zig.ext == "zig")
+check("unlisted built-ins removed", c2.languages.lua == nil and c2.languages.go == nil)
+lr.setup({ provider = "static", data_dir = tmp2, keymaps = false })
+check("no languages option keeps all defaults", require("learn_refactor.config").options.languages.lua ~= nil)
+
+-- unfinished challenges + continue (resume keeps edits and clock)
+lr.setup({ provider = "static", data_dir = tmp2, keymaps = false, languages = { "lua", "python" } })
+local store2 = require("learn_refactor.store")
+local ui2 = require("learn_refactor.ui")
+check("nothing unfinished at first", #ui2.unfinished() == 0)
+local function mk(lang, title, at)
+  local _, ch = store2.save_challenge({ language = lang, complexity = "easy", title = title, description = "d",
+    code = "local a = 1\nreturn a\n", bugs = {}, standards = {}, created_at = at })
+  return ch
+end
+local a = mk("lua", "A", 100)
+local b = mk("python", "B", 200)
+local gone = mk("go", "G (not enabled)", 300)
+local done = mk("lua", "D (finished)", 400)
+store2.append_history({ challenge_id = done.id, status = "finished", at = 500, points = 1, language = "lua", complexity = "easy" })
+local list = ui2.unfinished()
+check("unfinished: excludes finished and disabled languages", #list == 2 and list[1].ch.id == b.id and list[2].ch.id == a.id,
+  vim.inspect(vim.tbl_map(function(u) return u.ch.title end, list)))
+store2.append_history({ challenge_id = a.id, status = "stopped", at = 900, seconds = 42, language = "lua", complexity = "easy" })
+list = ui2.unfinished()
+check("unfinished: most recently touched first, carries seconds", list[1].ch.id == a.id and list[1].seconds == 42)
+
+local session2 = require("learn_refactor.session")
+session2.open(a)
+session2.play()
+vim.api.nvim_buf_set_lines(session2.current.buf, 0, -1, false, { "local renamed = 1", "return renamed" })
+session2.stop(true)
+local saved = vim.fn.readfile(store2.workspace(a.id) .. "/main.lua")
+check("stop saves the work for later", saved[1] == "local renamed = 1", vim.inspect(saved))
+store2.append_history({ challenge_id = a.id, status = "stopped", at = os.time() + 5, seconds = 77, language = "lua", complexity = "easy" })
+ui2.continue()
+check("continue reopens the latest unfinished", session2.current and session2.current.ch.id == a.id)
+local resumed = vim.api.nvim_buf_get_lines(session2.current.buf, 0, -1, false)
+check("continue keeps previous edits", resumed[1] == "local renamed = 1", vim.inspect(resumed))
+check("continue carries the clock", session2.current.elapsed_ns >= 77 * 1e9, session2.current.elapsed_ns)
+session2.stop(true)
+vim.fn.delete(store2.workspace(a.id) .. "/main.lua")
+session2.open(a, { resume = true, seconds = 5 }) -- no saved file: falls back to the original code
+check("resume without a file starts from original", vim.api.nvim_buf_get_lines(session2.current.buf, 0, 1, false)[1] == "local a = 1")
+session2.stop(true)
 
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")

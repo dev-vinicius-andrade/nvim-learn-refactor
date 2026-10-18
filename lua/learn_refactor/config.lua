@@ -72,6 +72,7 @@ M.defaults = {
   -- <leader>R (capital) avoids clashing with common <leader>r rename/restart LSP mappings.
   keymaps = {
     menu = "<leader>Rm", -- state-aware floating menu (play / pause / finish ...)
+    continue = "<leader>Rc", -- jump straight to the latest unfinished challenge
     start = "<leader>Rr",
     library = "<leader>Rl",
     play = "<leader>Rp",
@@ -85,8 +86,32 @@ M.defaults = {
 
 M.options = vim.deepcopy(M.defaults)
 
+--- `languages` selects what the menu offers. Either a list of built-in names, or a map where each entry is
+--- merged over the built-in definition of the same name (so `python = { test = "python3 {test}" }` keeps ext).
+--- Unlike other options it REPLACES the defaults instead of merging, so only what you list is shown.
+local function resolve_languages(user)
+  local builtin = M.defaults.languages
+  local out = {}
+  for k, v in pairs(user) do
+    local name, def
+    if type(k) == "number" then
+      name, def = v, {}
+    else
+      name, def = k, (type(v) == "table") and v or {}
+    end
+    if type(name) == "string" then
+      out[name] = vim.tbl_deep_extend("force", vim.deepcopy(builtin[name] or { ext = name }), def)
+    end
+  end
+  return out
+end
+
 function M.setup(opts)
-  M.options = vim.tbl_deep_extend("force", M.defaults, opts or {})
+  opts = opts or {}
+  M.options = vim.tbl_deep_extend("force", M.defaults, opts)
+  if type(opts.languages) == "table" and next(opts.languages) ~= nil then
+    M.options.languages = resolve_languages(opts.languages)
+  end
   return M.options
 end
 

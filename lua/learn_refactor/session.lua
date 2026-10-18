@@ -224,7 +224,8 @@ local function set_modifiable(v)
   end
 end
 
-function M.open(ch)
+function M.open(ch, opts)
+  opts = opts or {}
   if M.current then
     vim.notify("LearnRefactor: a session is active - :RefactorStop first", vim.log.levels.WARN)
     return
@@ -232,7 +233,15 @@ function M.open(ch)
   local lang = config.options.languages[ch.language] or {}
   local ext = lang.ext or ch.language
   local file = store.workspace(ch.id) .. "/main." .. ext
-  vim.fn.writefile(vim.split(ch.code, "\n", { plain = true }), file)
+  -- a still-loaded buffer from an earlier attempt would show stale text for a rewritten file
+  local stale = vim.fn.bufnr(file)
+  if stale > 0 then
+    pcall(vim.api.nvim_buf_delete, stale, { force = true })
+  end
+  -- resuming keeps what the user had saved in the workspace file; otherwise start from the original code
+  if not (opts.resume and vim.fn.filereadable(file) == 1) then
+    vim.fn.writefile(vim.split(ch.code, "\n", { plain = true }), file)
+  end
 
   vim.cmd("tabnew " .. vim.fn.fnameescape(file))
   local s = {
@@ -242,7 +251,7 @@ function M.open(ch)
     buf = vim.api.nvim_get_current_buf(),
     win = vim.api.nvim_get_current_win(),
     tab = vim.api.nvim_get_current_tabpage(),
-    elapsed_ns = 0,
+    elapsed_ns = (opts.resume and opts.seconds or 0) * 1e9,
     metrics = { keys = 0, arrows = 0, mouse = 0, spam = 0, hints = 0 },
     streak = 0,
     hint_idx = 0,
@@ -328,6 +337,11 @@ function M.stop(silent)
   M.current = nil
   if vim.api.nvim_buf_is_valid(s.buf) then
     vim.bo[s.buf].modifiable = true
+    if vim.bo[s.buf].modified and s.state ~= "ready" then
+      pcall(vim.api.nvim_buf_call, s.buf, function()
+        vim.cmd("silent! write") -- keep the work so :RefactorContinue can pick it up
+      end)
+    end
   end
   store.append_history({
     challenge_id = s.ch.id, language = s.ch.language, complexity = s.ch.complexity,

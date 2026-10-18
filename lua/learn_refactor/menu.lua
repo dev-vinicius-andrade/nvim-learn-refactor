@@ -26,7 +26,13 @@ function M.items()
     return { key = key, label = label, cmd = cmd, action = action, run = run }
   end
   if not s then
-    return {
+    local rows = {}
+    local pending = ui().unfinished()[1]
+    if pending then
+      rows[#rows + 1] = item("c", "Continue: " .. (pending.ch.title or "?") .. " [" .. pending.ch.language .. "]",
+        "RefactorContinue", "continue", function() lr().continue() end)
+    end
+    return vim.list_extend(rows, {
       item("n", "New challenge", "Refactor", "start", function() lr().start() end),
       item("l", "Saved challenges", "RefactorLibrary", "library", function() lr().library() end),
       item("g", "Stats", "RefactorStats", "stats", function() ui().stats() end),
@@ -34,7 +40,7 @@ function M.items()
       item("u", "Ollama: start", "RefactorOllama up", nil, function() ollama().command("up") end),
       item("d", "Ollama: stop", "RefactorOllama down", nil, function() ollama().command("down") end),
       item("i", "Ollama: status", "RefactorOllama status", nil, function() ollama().command("status") end),
-    }
+    })
   end
   local stop = item("s", "Stop (no score)", "RefactorStop", "stop", function() lr().stop() end)
   if s.state == "ready" then
