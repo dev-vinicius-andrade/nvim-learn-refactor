@@ -27,8 +27,9 @@ function M.check()
     else
       vim.health.error("curl not found (needed for provider = openai)")
     end
-    if o.openai.model then
-      vim.health.ok("openai model: " .. o.openai.model .. " @ " .. o.openai.base_url)
+    local model = o.openai.model or o.ollama.model
+    if model then
+      vim.health.ok("openai model: " .. model .. " @ " .. o.openai.base_url)
     else
       vim.health.error("openai.model not set")
     end
