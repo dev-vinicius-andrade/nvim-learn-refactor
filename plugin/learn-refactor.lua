@@ -34,7 +34,8 @@ local simple = {
   RefactorFinish = { "finish", "Finish and score the session" },
   RefactorHint = { "hint", "Reveal a hint (costs points)" },
   RefactorLibrary = { "library", "Pick a saved challenge" },
-  RefactorStats = { "stats", "Show points and weak topics" },
+  RefactorConfigTips = { "config_tips", "Suggest improvements to your Neovim setup" },
+  RefactorStats ={ "stats", "Show points and weak topics" },
 }
 for name, def in pairs(simple) do
   vim.api.nvim_create_user_command(name, function()

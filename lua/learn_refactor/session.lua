@@ -61,6 +61,9 @@ local function on_key(_, typed)
   if not ok then
     return
   end
+  if #s.keylog < 20000 then
+    s.keylog[#s.keylog + 1] = { key, vim.api.nvim_get_mode().mode }
+  end
   local name = key:match("^<(%a+)>$")
   if name and ARROWS[name] then
     m.arrows = m.arrows + 1
@@ -229,6 +232,7 @@ function M.open(ch)
     metrics = { keys = 0, arrows = 0, mouse = 0, spam = 0, hints = 0 },
     streak = 0,
     hint_idx = 0,
+    keylog = {},
   }
   M.current = s
   vim.bo[s.buf].modifiable = false
@@ -327,31 +331,74 @@ end
 
 local function show_result(s, result)
   local lines = { string.format(" %s  [%s/%s]", s.ch.title, s.ch.language, s.ch.complexity), "" }
-  if result.unchanged then
-    lines[#lines + 1] = " You did not change anything - 0 points."
+  if result.note then
+    lines[#lines + 1] = " " .. result.note
   end
   for _, l in ipairs(result.lines) do
     lines[#lines + 1] = string.format(" %s %-52s %+4d", l.ok and "✔" or "✘", l.label, l.points)
   end
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = string.format(" TOTAL %d / %d   time %s   keys %d", result.points, result.max_points,
-    fmt_time(result.seconds), s.metrics.keys)
-  lines[#lines + 1] = " Press q to close"
-  local b = scratch(lines)
-  local width = 0
-  for _, l in ipairs(lines) do
-    width = math.max(width, vim.fn.strdisplaywidth(l))
+  if result.tests_ok == false and result.test_output and result.test_output:match("%S") then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = " Test output:"
+    local shown = 0
+    for l in result.test_output:gmatch("[^\n]+") do
+      shown = shown + 1
+      if shown > 6 then
+        break
+      end
+      lines[#lines + 1] = "   " .. l
+    end
   end
-  width = math.min(width + 2, vim.o.columns - 4)
+  if result.points > 0 or result.max_points > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = string.format(" TOTAL %d / %d   time %s   keys %d", result.points, result.max_points,
+      fmt_time(result.seconds), s.metrics.keys)
+  end
+  if result.coach and #result.coach > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = " Motion coach:"
+    for _, t in ipairs(result.coach) do
+      lines[#lines + 1] = "  - " .. t
+    end
+  end
+  if result.advice and #result.advice > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = " Your setup:"
+    for _, t in ipairs(result.advice) do
+      lines[#lines + 1] = "  " .. t
+    end
+  end
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = s.ch.solution and " q close   s reference solution" or " q close"
+
+  local b = scratch(lines)
+  local width = math.min(100, vim.o.columns - 6)
+  local height = 0
+  for _, l in ipairs(lines) do
+    height = height + math.max(1, math.ceil(vim.fn.strdisplaywidth(l) / (width - 1)))
+  end
+  height = math.min(height, vim.o.lines - 6)
   local w = vim.api.nvim_open_win(b, true, {
     relative = "editor", style = "minimal", border = "rounded", title = " Result ",
-    width = width, height = #lines,
-    row = math.max(0, math.floor((vim.o.lines - #lines) / 2)),
+    width = width, height = height,
+    row = math.max(0, math.floor((vim.o.lines - height) / 2)),
     col = math.max(0, math.floor((vim.o.columns - width) / 2)),
   })
+  vim.wo[w].wrap = true
+  vim.wo[w].linebreak = true
   for _, key in ipairs({ "q", "<Esc>" }) do
     vim.keymap.set("n", key, function()
       pcall(vim.api.nvim_win_close, w, true)
+    end, { buffer = b, nowait = true })
+  end
+  if s.ch.solution then
+    vim.keymap.set("n", "s", function()
+      pcall(vim.api.nvim_win_close, w, true)
+      local ext = (config.options.languages[s.ch.language] or {}).ext or s.ch.language
+      local sb = scratch(vim.split(s.ch.solution, "\n", { plain = true }))
+      vim.bo[sb].filetype = vim.filetype.match({ filename = "main." .. ext }) or ""
+      vim.cmd("tabnew")
+      vim.api.nvim_win_set_buf(0, sb)
     end, { buffer = b, nowait = true })
   end
 end
@@ -379,15 +426,21 @@ function M.finish()
   end)
 
   local errors
-  if #vim.lsp.get_clients({ bufnr = s.buf }) > 0 then
+  local lsp = #vim.lsp.get_clients({ bufnr = s.buf }) > 0
+  if lsp then
     errors = #vim.diagnostic.get(s.buf, { severity = vim.diagnostic.severity.ERROR })
   end
-  local m = vim.tbl_extend("force", s.metrics, { seconds = s.elapsed_ns / 1e9, errors = errors, file = s.file })
+  local m = vim.tbl_extend("force", s.metrics, { seconds = s.elapsed_ns / 1e9, errors = errors })
+
+  local coach_tips, coach_stats = require("learn_refactor.coach").analyze(s.keylog, m)
+  local advice = require("learn_refactor.advisor").lines({ stats = coach_stats, metrics = m, lsp = lsp }, 5)
 
   close_ui()
   M.current = nil
   scoring.score(s.ch, text, m, function(result)
     result.seconds = m.seconds
+    result.coach = coach_tips
+    result.advice = advice
     scoring.update_profile(s.ch, result)
     store.append_history({
       challenge_id = s.ch.id, language = s.ch.language, complexity = s.ch.complexity,

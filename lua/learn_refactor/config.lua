@@ -4,9 +4,11 @@ M.defaults = {
   -- where challenges, workspaces, history and profile are saved
   data_dir = vim.fn.stdpath("data") .. "/learn-refactor",
   languages = {
-    lua = { ext = "lua", run = "lua {file}" },
-    python = { ext = "py", run = "python {file}" },
-    javascript = { ext = "js", run = "node {file}" },
+    -- `test` = command that runs the hidden test file ({test}); omit to disable tests for that language.
+    -- Tests are model-written code executed on YOUR machine (see README, "Security").
+    lua = { ext = "lua", test = "lua {test}" },
+    python = { ext = "py", test = "python {test}" },
+    javascript = { ext = "js", test = "node {test}" },
     typescript = { ext = "ts" },
     go = { ext = "go" },
     rust = { ext = "rs" },
@@ -14,9 +16,13 @@ M.defaults = {
     cpp = { ext = "cpp" },
     java = { ext = "java" },
     csharp = { ext = "cs" },
-    ruby = { ext = "rb", run = "ruby {file}" },
-    bash = { ext = "sh", run = "bash {file}" },
+    ruby = { ext = "rb", test = "ruby {test}" },
+    bash = { ext = "sh" },
   },
+  -- run model-written hidden tests (validated against the model's reference solution before use)
+  run_tests = true,
+  -- anti-gaming: fewer non-blank lines than this fraction of the original scores 0
+  min_code_ratio = 0.35,
   complexities = { "easy", "medium", "hard", "expert" },
   -- "anthropic" calls the API with curl (needs api key env var); "static" uses built-in seeds
   provider = "anthropic",

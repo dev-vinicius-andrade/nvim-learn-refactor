@@ -71,6 +71,12 @@ function M.menu(opts)
   end)
 end
 
+--- standalone review of the user's own Neovim setup
+function M.config_tips()
+  local lines = require("learn_refactor.advisor").lines({}, 20)
+  vim.notify("Setup tips:\n" .. table.concat(lines, "\n"))
+end
+
 function M.stats()
   local p = store.profile()
   local lines = { "Total points: " .. (p.total_points or 0), "" }

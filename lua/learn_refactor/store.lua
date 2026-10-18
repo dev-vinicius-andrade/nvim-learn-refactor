@@ -38,7 +38,9 @@ function M.new_id()
 end
 
 function M.save_challenge(ch)
-  ch.id = ch.id or M.new_id()
+  if type(ch.id) ~= "string" or not ch.id:match("^[%w%-_]+$") then
+    ch.id = M.new_id() -- never use an untrusted id as a path component
+  end
   ch.created_at = ch.created_at or os.time()
   return write_json(dir("challenges") .. "/" .. ch.id .. ".json", ch), ch
 end

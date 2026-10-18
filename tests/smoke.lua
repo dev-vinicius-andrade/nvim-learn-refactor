@@ -164,5 +164,84 @@ vim.wait(1000, function() return unknown ~= nil end)
 check("unknown provider falls back", unknown and unknown.language == "lua", unknown and unknown.err)
 vim.system = real_system
 
+-- coach
+local coach = require("learn_refactor.coach")
+local log = {}
+for _ = 1, 8 do log[#log + 1] = { "j", "n" } end
+for _ = 1, 7 do log[#log + 1] = { "<BS>", "i" } end
+local tips, stats = coach.analyze(log, { arrows = 2, mouse = 1 })
+local joined = table.concat(tips, "\n")
+check("coach: j run", joined:find("8 j/k") ~= nil, joined)
+check("coach: backspace run", joined:find("7 backspaces") ~= nil, joined)
+check("coach: arrows+mouse", joined:find("2 arrow") ~= nil and joined:find("1 mouse") ~= nil, joined)
+check("coach: stats", stats.vertical == 8)
+local clean = {}
+for _, k in ipairs({ "d", "i", "w" }) do clean[#clean + 1] = { k, k == "i" and "no" or "n" } end
+check("coach: clean log", coach.analyze(clean, {})[1]:find("No bad habits") ~= nil)
+
+-- advisor
+local advisor = require("learn_refactor.advisor")
+vim.o.relativenumber = false
+local atips = advisor.analyze({ stats = { vertical = 10 }, metrics = {}, lsp = false })
+check("advisor: has tips", #atips > 3)
+check("advisor: relevant tips first", atips[1].relevant == true)
+local text = table.concat(advisor.lines({}, 50), "\n")
+check("advisor: relativenumber tip", text:find("relativenumber") ~= nil)
+vim.o.relativenumber = true
+check("advisor: tip disappears when fixed", table.concat(advisor.lines({}, 50), "\n"):find("relativenumber") == nil)
+
+-- hidden tests + anti-gaming
+cfg.languages.lua.test = "nvim --headless -u NONE -l {test}" -- use the running nvim as the lua runner
+cfg.run_tests = true
+local test_ch = {
+  id = "t1", language = "lua", complexity = "easy",
+  code = "local M = {}\nfunction M.add(a, b)\n  return a - b\nend\nreturn M\n",
+  solution = "local M = {}\nfunction M.add(a, b)\n  return a + b\nend\nreturn M\n",
+  bugs = { { id = "sub", points = 30, fixed = { type = "absent", pattern = "a - b" } } },
+  standards = { { id = "named", tag = "naming", points = 10, check = { type = "present", pattern = "function M\\.add" } } },
+  tests = { code = "package.path = './?.lua;' .. package.path\nlocal m = require('main')\nassert(m.add(2, 3) == 5, 'add broken')\nvim.cmd('qa!')\n" },
+}
+local function run_score(text_in, ch_in)
+  local res
+  scoring.score(ch_in or test_ch, text_in, { seconds = 9999, keys = 1, arrows = 0, mouse = 0, spam = 0, hints = 0 }, function(r) res = r end)
+  vim.wait(20000, function() return res ~= nil end)
+  return res
+end
+local passing = run_score(test_ch.solution)
+check("tests pass on solution", passing and passing.tests_ok == true, passing and passing.test_output)
+local broken = run_score("local M = {}\nfunction M.add(a, b)\n  return a * b\nend\nreturn M\n")
+check("tests fail on wrong behaviour", broken and broken.tests_ok == false)
+local bug_line
+for _, l in ipairs(broken and broken.lines or {}) do if l.label:find("^Bug") then bug_line = l end end
+check("credit halved when tests fail", bug_line and bug_line.points == 15, bug_line and bug_line.points)
+local gutted = run_score("return {}\n", vim.tbl_extend("force", test_ch, { code = string.rep("local x = 1\n", 10) }))
+check("deleting everything scores 0", gutted and gutted.points == 0 and gutted.note ~= nil)
+local same = run_score(test_ch.code)
+check("unchanged scores 0", same and same.points == 0)
+
+-- generator validates tests against solution; bad tests dropped
+package.loaded["learn_refactor.provider.mock"] = {
+  request = function(_, cb)
+    cb(vim.json.encode(vim.tbl_extend("force", test_ch, { id = vim.NIL, title = "T", description = "d",
+      tests = { code = "error('always fails')" } })))
+  end,
+}
+cfg.routes = {}
+cfg.provider = "mock"
+local gen_bad
+gen.generate("lua", "easy", function(c, err) gen_bad = c or { err = err } end)
+vim.wait(20000, function() return gen_bad ~= nil end)
+check("tests failing on solution are dropped", gen_bad and gen_bad.tests == nil and gen_bad.solution ~= nil, gen_bad and gen_bad.err)
+package.loaded["learn_refactor.provider.mock"] = {
+  request = function(_, cb)
+    cb(vim.json.encode(vim.tbl_extend("force", test_ch, { id = vim.NIL, title = "T2", description = "d", run_cmd = "rm -rf /" })))
+  end,
+}
+local gen_good
+gen.generate("lua", "easy", function(c, err) gen_good = c or { err = err } end)
+vim.wait(20000, function() return gen_good ~= nil end)
+check("valid tests kept", gen_good and gen_good.tests ~= nil, gen_good and gen_good.err)
+check("model-supplied run_cmd stripped", gen_good and gen_good.run_cmd == nil)
+
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")

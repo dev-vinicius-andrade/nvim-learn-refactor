@@ -56,8 +56,14 @@ Respond with ONE JSON object only (no markdown fences, no prose) with this shape
   "standards": [ { "id": "kebab-id", "tag": "naming|duplication|magic-numbers|error-handling|idioms|stdlib|scoping|functional|complexity|types|...",
                    "name": "human readable rule", "points": 10,
                    "check": { "type": "absent"|"present", "pattern": "vim very-magic regex" } } ],
-  "run_cmd": "optional shell command using {file}; exit code 0 means behaviour is correct after fixes (omit if not feasible)"
+  "solution": "the full source file AFTER fixing every bug and applying all the standards (reference answer)",
+  "tests": { "code": "a self-contained test file for the code, see below" }
 }
+The code is saved as main.<ext> and the tests as hidden_test.<ext> in the same directory; the test file imports/requires
+the module from main (so main must expose the functions, e.g. `return M` in Lua, `module.exports` in JS, plain defs in
+Python) and exits non-zero on failure using only the standard library (plain asserts, no test framework). Tests must
+exercise the intended behaviour, including the bugs, and PASS on "solution". Omit "tests" if you cannot do this reliably.]]
+local SCHEMA_CHECKS = [[
 Rules for checks: patterns are Vim regex in very-magic mode (\v), case-sensitive, matched against the WHOLE file text
 (use \n for newlines). In very-magic mode ESCAPE literal = ~ @ % & { } with a backslash (e.g. \= for a literal equals sign) and use <word> for word boundaries (there is no \b). A "bug" check must be FALSE on the original code and TRUE once any reasonable fix is applied;
 prefer "absent" checks of the buggy construct. Same for standards: the check must fail on the original code.
@@ -84,6 +90,7 @@ function M.build_prompt(language, complexity)
     lines[#lines + 1] = "Already used, DO NOT repeat these themes: " .. table.concat(h.recent_titles, "; ") .. "."
   end
   lines[#lines + 1] = SCHEMA
+  lines[#lines + 1] = SCHEMA_CHECKS
   return table.concat(lines, "\n")
 end
 
@@ -104,18 +111,31 @@ function M.parse(raw)
   end
   data.bugs = data.bugs or {}
   data.standards = data.standards or {}
+  data.run_cmd = nil -- never trust model-supplied shell commands
+  data.id, data.created_at = nil, nil -- ids become file names: always assigned locally
+  if type(data.solution) ~= "string" then
+    data.solution = nil
+  end
+  if type(data.tests) ~= "table" or type(data.tests.code) ~= "string" then
+    data.tests = nil
+  end
   return data
 end
 
 local function validate_checks(ch)
-  -- the original code must FAIL every check, otherwise it awards free points
+  -- the original code must FAIL every check (no free points); bug checks must also PASS on the
+  -- reference solution when there is one (otherwise they are unreachable)
   local scoring = require("learn_refactor.scoring")
   local dropped = 0
-  local function keep(list, get)
+  local function keep(list, get, on_solution)
     local out = {}
     for _, item in ipairs(list) do
       local res = scoring.run_check(get(item), ch.code)
-      if res == false then
+      local reachable = true
+      if on_solution and ch.solution then
+        reachable = scoring.run_check(get(item), ch.solution) == true
+      end
+      if res == false and reachable then
         out[#out + 1] = item
       else
         dropped = dropped + 1
@@ -123,9 +143,23 @@ local function validate_checks(ch)
     end
     return out
   end
-  ch.bugs = keep(ch.bugs, function(b) return b.fixed end)
-  ch.standards = keep(ch.standards, function(s) return s.check end)
+  ch.bugs = keep(ch.bugs, function(b) return b.fixed end, true)
+  ch.standards = keep(ch.standards, function(s) return s.check end, false)
   return dropped
+end
+
+--- keep hidden tests only if they pass on the reference solution; cb() when done
+local function validate_tests(ch, cb)
+  if not ch.tests then
+    return cb()
+  end
+  local scoring = require("learn_refactor.scoring")
+  scoring.run_tests(ch, ch.solution, function(ok)
+    if ok ~= true then
+      ch.tests = nil -- unrunnable, or wrong: never punish the learner for it
+    end
+    cb()
+  end)
 end
 
 --- Generate async. cb(challenge|nil, err|nil)
@@ -138,8 +172,10 @@ function M.generate(language, complexity, cb)
       if #ch.bugs == 0 and #ch.standards == 0 then
         return cb(nil, "challenge had no usable checks")
       end
-      local _, saved = store.save_challenge(ch)
-      return cb(saved)
+      return validate_tests(ch, function()
+        local _, saved = store.save_challenge(ch)
+        cb(saved)
+      end)
     end
     if opts.fallback then
       local ch2 = M.fallback(language, complexity)

@@ -48,6 +48,7 @@ Weak models are handled: generated checks that do not compile, or that already p
 | `:RefactorHint` | reveal next bug hint (-5 pts) |
 | `:RefactorLibrary` | replay a saved challenge |
 | `:RefactorStats` | points + weakest topics |
+| `:RefactorConfigTips` | suggestions to improve your own Neovim setup |
 
 Default keymaps: `<leader>rp` play, `rP` pause, `rs` stop, `rf` finish, `rh` hint (`keymaps = false`-ish: set entries to `false`).
 
@@ -58,6 +59,24 @@ Statusline: `require("learn_refactor").statusline()`. Events: `User LearnRefacto
 - Bugs found/fixed (check per bug), best-practice rules (naming, duplication, magic numbers, idioms...)
 - Optional `run_cmd` behaviour check (+40), no LSP errors (+10), speed bonus vs par time (+15)
 - Clean motions bonus (+10); penalty per arrow key, mouse click, or `hjkl` repeated >4x (max -15); hints cost points
+
+## Coaching and setup tips
+
+On finish you also get:
+
+- **Motion coach**: patterns found in your keystrokes with the better alternative, e.g. "8 j/k presses in long runs: use `12j`, `}`, `/pattern`", long `w` chains, `x` runs, backspace runs, arrows, mouse. After a long session it lists features you never used (text objects, `.`, `*`, `%`, macros).
+- **Your setup**: suggestions from your own config, tied to what happened in the session: options (`relativenumber`, `scrolloff`, `smartcase`, `inccommand`, `undofile`, `mouse`...), missing plugin categories (jump, surround, text objects, which-key, fuzzy finder, formatter, treesitter; installed plugins are detected via lazy.nvim or the runtimepath), and LSP refactoring keys. It only reports; it never changes your config. `:RefactorConfigTips` shows the full list any time.
+- `s` in the result window opens the reference solution when the model provided one.
+
+## Scoring integrity
+
+- Models also write a reference `solution` and hidden `tests` (plain asserts, run through `languages.<lang>.test`). Tests are kept only if they pass on that solution, and bug checks must hold on the solution too; otherwise they are dropped, so you are never punished for a broken test.
+- If hidden tests fail on your result, bug/standard credit is halved; if they pass you get +40.
+- Deleting most of the code (below `min_code_ratio`, default 35% of the original non-blank lines) or changing nothing scores 0.
+
+## Security
+
+Challenge code and hidden tests are written by a model and **run on your machine** when you finish (never at generation time, except the validation run of tests against the reference solution). Model-supplied shell commands and ids are ignored: only the command in `languages.<lang>.test` is executed, in a temp directory with a 15s timeout. It is not a sandbox. Set `run_tests = false` to disable, or point `test` at a container/sandbox wrapper.
 
 ## Adaptive generation
 
