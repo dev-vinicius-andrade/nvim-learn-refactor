@@ -334,5 +334,18 @@ gen.generate("lua", "easy", function(c, err) best = c or { err = err } end)
 vim.wait(5000, function() return best ~= nil end)
 check("attempts capped, best kept", calls_n == 3 and best and #best.bugs == 1, calls_n)
 
+-- regression: keymaps = false (lazy.nvim `keys` owns the mappings) must not break sessions
+local saved_keymaps = cfg.keymaps
+cfg.keymaps = false
+local ok_open, open_err = pcall(function()
+  session.open(lua_ch)
+  session.stop(true)
+end)
+check("session opens with keymaps = false", ok_open, open_err)
+if not ok_open and session.current then session.stop(true) end
+cfg.keymaps = saved_keymaps
+require("learn_refactor").setup({ provider = "static", data_dir = tmp, keymaps = false })
+check("setup accepts keymaps = false", true)
+
 print(failures == 0 and "ALL PASSED" or (failures .. " FAILED"))
 vim.cmd(failures == 0 and "qa!" or "cq!")

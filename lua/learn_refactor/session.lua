@@ -262,7 +262,9 @@ function M.open(ch)
     end,
   })
   emit("Open", { id = ch.id })
-  vim.notify("Refactor ready - press Play (" .. (config.options.keymaps.play or ":RefactorPlay") .. ") to start the clock")
+  -- `keymaps` may be false (lazy.nvim `keys` owns the mappings)
+  local play_key = (config.options.keymaps or {}).play
+  vim.notify("Refactor ready - :RefactorPlay" .. (play_key and (" or " .. play_key) or "") .. " starts the clock")
 end
 
 function M.play()
