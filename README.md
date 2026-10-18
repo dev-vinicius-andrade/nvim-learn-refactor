@@ -7,15 +7,23 @@ Requires Neovim 0.10+. Works with whatever you already have: the exercise is a r
 (`<data>/learn-refactor/workspace/<id>/main.<ext>`), so LSP, treesitter, formatters, completion and linters attach normally.
 Pickers use `vim.ui.select` (telescope-ui-select, snacks, dressing, fzf-lua... take over automatically).
 
-## Install (lazy.nvim)
+## Install (lazy.nvim / LazyVim)
+
+Copy [`examples/lazy.lua`](examples/lazy.lua) to `~/.config/nvim/lua/plugins/learn-refactor.lua`
+(LazyVim and any setup that imports `plugins`), then `:Lazy sync`. It lazy-loads on the commands and the
+`<leader>R` keys, and registers a which-key group. Minimal version:
 
 ```lua
 {
   "dev-vinicius-andrade/nvim-learn-refactor",
-  cmd = { "Refactor", "RefactorLibrary", "RefactorStats" },
-  opts = {},               -- see lua/learn_refactor/config.lua
+  cmd = { "Refactor", "RefactorLibrary", "RefactorStats", "RefactorConfigTips" },
+  keys = { { "<leader>Rr", "<cmd>Refactor<cr>", desc = "Refactor: start challenge" } },
+  opts = { keymaps = false },
 }
 ```
+
+Local checkout: use `dir = "~/path/to/nvim-learn-refactor"` instead of the repo name. Packer/vim-plug/`vim.pack` also
+work: any manager that puts the repo on the runtimepath, then `require("learn_refactor").setup()` (optional).
 
 Challenge generation uses the Anthropic API via `curl`: `export ANTHROPIC_API_KEY=...`.
 Without a key (or on failure) it falls back to your saved library, then built-in seeds. Run `:checkhealth learn-refactor`.
@@ -50,7 +58,7 @@ Weak models are handled: generated checks that do not compile, or that already p
 | `:RefactorStats` | points + weakest topics |
 | `:RefactorConfigTips` | suggestions to improve your own Neovim setup |
 
-Default keymaps: `<leader>rp` play, `rP` pause, `rs` stop, `rf` finish, `rh` hint (`keymaps = false`-ish: set entries to `false`).
+Default keymaps (set `keymaps = false`, or one entry to `false`, to skip): `<leader>Rr` start, `Rl` library, `Rp` play, `RP` pause, `Rs` stop, `Rf` finish, `Rh` hint, `Rt` setup tips.
 
 Statusline: `require("learn_refactor").statusline()`. Events: `User LearnRefactorOpen|Play|Pause|Stop|Finish`.
 

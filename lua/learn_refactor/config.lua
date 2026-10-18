@@ -51,13 +51,17 @@ M.defaults = {
   hint_cost = 5,
   -- floating control bar with clickable play / pause / stop / finish
   control_bar = true,
-  -- set to false to skip default keymaps; <leader>r prefix
+  -- `false` to skip default keymaps (e.g. when lazy.nvim `keys` defines them), or override per action.
+  -- <leader>R (capital) avoids clashing with common <leader>r rename/restart LSP mappings.
   keymaps = {
-    play = "<leader>rp",
-    pause = "<leader>rP",
-    stop = "<leader>rs",
-    finish = "<leader>rf",
-    hint = "<leader>rh",
+    start = "<leader>Rr",
+    library = "<leader>Rl",
+    play = "<leader>Rp",
+    pause = "<leader>RP",
+    stop = "<leader>Rs",
+    finish = "<leader>Rf",
+    hint = "<leader>Rh",
+    config_tips = "<leader>Rt",
   },
 }
 
